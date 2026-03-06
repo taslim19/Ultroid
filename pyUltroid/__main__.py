@@ -6,6 +6,14 @@
 # <https://github.com/TeamUltroid/pyUltroid/blob/main/LICENSE>.
 
 from . import *
+import warnings
+
+# Suppress noisy python-version FutureWarning from google.api_core
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    module="google.api_core._python_version_support",
+)
 
 
 def main():
