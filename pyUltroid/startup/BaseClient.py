@@ -64,10 +64,6 @@ class UltroidClient(TelegramClient):
         if self._log_at:
             self.logger.info("Trying to login.")
         try:
-            await self.connect()
-            if not await self.is_user_authorized() and not kwargs.get("bot_token"):
-                 self.logger.critical("Session invalid and no BOT_TOKEN provided. Cannot start interactively in this environment.")
-                 sys.exit(1)
             await self.start(**kwargs)
         except ApiIdInvalidError:
             self.logger.critical("API ID and API_HASH combination does not match!")
