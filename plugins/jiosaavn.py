@@ -9,18 +9,48 @@
 ✘ Commands Available -
 
 • `{i}splay <song name>`
-    Play audio from JioSaavn in Voice Chat.
+    Play audio from JioSaavn in Voice Chat (Direct).
 """
 
 import os
+import asyncio
 from pyUltroid.fns.helper import async_searcher, fast_download
 from telethon.tl.types import DocumentAttributeAudio
-from . import ultroid_cmd, get_string, LOGS, eor, udB
+from . import ultroid_cmd, get_string, LOGS, eor, udB, vcClient
+
+# py-tgcalls 2.x imports
+try:
+    from pytgcalls import PyTgCalls
+    from pytgcalls.types import AudioPiped
+except ImportError:
+    PyTgCalls = None
+    AudioPiped = None
+
+# Global PyTgCalls instance for this plugin
+_call = None
+
+async def get_call_client():
+    global _call
+    if not PyTgCalls:
+        return None
+    if _call is None:
+        _call = PyTgCalls(vcClient)
+    
+    # In py-tgcalls 2.x, we can attempt to start it. 
+    # If it's already started, it usually handles it or we can check status.
+    try:
+        await _call.start()
+    except Exception:
+        pass
+    return _call
 
 @ultroid_cmd(
     pattern="splay( (.*)|$)",
 )
 async def jiosaavn_play(event):
+    if not PyTgCalls:
+        return await event.eor("`'py-tgcalls' is not installed! Please install it to use this command.`", time=5)
+    
     query = event.pattern_match.group(1).strip()
     if not query:
         return await event.eor("`Give me a song name to play!`", time=5)
@@ -36,10 +66,7 @@ async def jiosaavn_play(event):
         
         song_data = data["data"]["results"][0]
         title = song_data["name"]
-        song_id = song_data["id"]
         artist = song_data.get("primaryArtists") or song_data.get("artists", {}).get("primary", [{}])[0].get("name") or "Unknown Artist"
-        duration = song_data.get("duration", 0)
-        image_url = song_data["image"][-1]["url"] if isinstance(song_data["image"], list) and song_data["image"] else ""
         
         # 2. Get high quality download link
         download_url = ""
@@ -61,30 +88,25 @@ async def jiosaavn_play(event):
         if not os.path.exists(file_path):
             return await xx.edit("`Failed to download the song for playback.`")
 
-        await xx.edit(f"`Playing '{title}' by {artist} from JioSaavn...`")
+        await xx.edit(f"`Joining Voice Chat and playing '{title}'...`")
 
-        # 4. Play via VCBot using the local file
+        # 4. Play via PyTgCalls directly
         try:
-            from . import vcClient
-            if not vcClient:
+            call = await get_call_client()
+            if not call:
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                return await xx.edit(get_string("help_12"))
+                return await xx.edit("`Failed to initialize VC Client.`")
 
-            import sys
-            if 'vcbot' in sys.modules:
-                import vcbot
-                if hasattr(vcbot, 'ultSongs'):
-                    # Use the local file_path instead of the URL
-                    await vcbot.ultSongs.group_call.start_audio(file_path)
-                    # We should probably keep the file while playing, 
-                    # but many VC bots handle cleanup or need it.
-                    # For now, we'll just notify success.
-                    return await xx.edit(f"**Playing from JioSaavn (Local)**\n\n**Song:** `{title}`\n**Artist:** `{artist}`")
-
-            # Fallback if VCBot objects aren't directly reachable
-            return await xx.edit(f"**Song Downloaded!**\n\n**Title:** `{title}`\n**Artist:** `{artist}`\n\n`Path: {file_path}`\n`VCBot integration pending - please ensure VCBot is correctly installed.`")
-
+            # Play the local file
+            await call.play(event.chat_id, AudioPiped(file_path))
+            
+            await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Status:** `Streaming Local File`")
+            
+            # Optional: We could start a background task to delete the file after some time or when playback ends.
+            # But pytgcalls 2.x might need the file open. 
+            # Usually, it's safer to cleanup after some delay or on stop.
+            
         except Exception as e:
             if os.path.exists(file_path):
                 os.remove(file_path)
