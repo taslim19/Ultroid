@@ -18,13 +18,15 @@ from pyUltroid.fns.helper import async_searcher, fast_download
 from telethon.tl.types import DocumentAttributeAudio
 from . import ultroid_cmd, get_string, LOGS, eor, udB, vcClient
 
-# py-tgcalls 2.x imports
+# py-tgcalls 2.x imports (v2.2.11 compatible)
 try:
     from pytgcalls import PyTgCalls
-    from pytgcalls.types import AudioPiped
-except ImportError:
+    from pytgcalls.types import MediaStream, AudioQuality
+except Exception as e:
+    LOGS.error(f"py-tgcalls 2.x import failed: {e}")
     PyTgCalls = None
-    AudioPiped = None
+    MediaStream = None
+    AudioQuality = None
 
 # Global PyTgCalls instance for this plugin
 _call = None
@@ -34,12 +36,15 @@ async def get_call_client():
     if not PyTgCalls:
         return None
     if _call is None:
-        _call = PyTgCalls(vcClient)
+        try:
+            _call = PyTgCalls(vcClient)
+        except Exception as e:
+            LOGS.error(f"PyTgCalls init failed: {e}")
+            return None
     
-    # In py-tgcalls 2.x, we can attempt to start it. 
-    # If it's already started, it usually handles it or we can check status.
     try:
-        await _call.start()
+        if not _call.is_running:
+            await _call.start()
     except Exception:
         pass
     return _call
@@ -48,8 +53,8 @@ async def get_call_client():
     pattern="splay( (.*)|$)",
 )
 async def jiosaavn_play(event):
-    if not PyTgCalls:
-        return await event.eor("`'py-tgcalls' is not installed! Please install it to use this command.`", time=5)
+    if not PyTgCalls or not MediaStream:
+        return await event.eor("`'py-tgcalls' 2.x is not correctly installed or imported! Check logs.`", time=5)
     
     query = event.pattern_match.group(1).strip()
     if not query:
@@ -96,16 +101,12 @@ async def jiosaavn_play(event):
             if not call:
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                return await xx.edit("`Failed to initialize VC Client.`")
+                return await xx.edit("`Failed to initialize VC Client. Check if VCBOT is enabled.`")
 
-            # Play the local file
-            await call.play(event.chat_id, AudioPiped(file_path))
+            # Play the local file using MediaStream (v2.x)
+            await call.play(event.chat_id, MediaStream(file_path, AudioQuality.STUDIO))
             
-            await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Status:** `Streaming Local File`")
-            
-            # Optional: We could start a background task to delete the file after some time or when playback ends.
-            # But pytgcalls 2.x might need the file open. 
-            # Usually, it's safer to cleanup after some delay or on stop.
+            await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Status:** `Streaming Direct (v2.x)`")
             
         except Exception as e:
             if os.path.exists(file_path):
