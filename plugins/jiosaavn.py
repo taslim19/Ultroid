@@ -3,7 +3,7 @@
 #
 # This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
 # PLease read the GNU Affero General Public License in
-# <https://github.com/TeamUltroid/pyUltroid/blob/main/LICENSE/>.
+# <https://github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
 
 """
 ✘ Commands Available -
@@ -16,7 +16,7 @@ import os
 import asyncio
 from pyUltroid.fns.helper import async_searcher, fast_download
 from telethon.tl.types import DocumentAttributeAudio
-from . import ultroid_cmd, get_string, LOGS, eor, udB, vcClient
+from . import ultroid_cmd, LOGS, eor, udB
 
 # py-tgcalls 2.x imports (v2.2.11 compatible)
 try:
@@ -31,16 +31,15 @@ except Exception as e:
 # Global PyTgCalls instance for this plugin
 _call = None
 
-async def get_call_client():
+async def get_call_client(client):
     global _call
     if not PyTgCalls:
         return None
     if _call is None:
         try:
-            # The 'Invalid MTProto Client' error happens because py-tgcalls 2.x 
-            # might not recognize the patched Telethon client directly.
-            # We pass the vcClient, which is an instance of UltroidClient (TelegramClient).
-            _call = PyTgCalls(vcClient)
+            # Using the active event client directly to avoid "Invalid MTProto Client"
+            # and to remove dependency on external vcClient objects.
+            _call = PyTgCalls(client)
         except Exception as e:
             LOGS.error(f"PyTgCalls init failed: {e}")
             return None
@@ -101,27 +100,22 @@ async def jiosaavn_play(event):
 
         # 4. Play via PyTgCalls directly
         try:
-            call = await get_call_client()
+            call = await get_call_client(event.client)
             if not call:
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                return await xx.edit("`Failed to initialize VC Client. This usually means the session is invalid or VCBOT is disabled.`")
+                return await xx.edit("`Failed to initialize Voice Call Client. Ensure your account can join voice chats.`")
 
             # Play the local file using MediaStream (v2.x)
-            # Use chat_id as a string if necessary, but Telethon ids are integers
             await call.play(event.chat_id, MediaStream(file_path, AudioQuality.STUDIO))
             
-            await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Status:** `Streaming (py-tgcalls 2.x)`")
+            await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Status:** `Streaming (Direct)`")
             
         except Exception as e:
             if os.path.exists(file_path):
                 os.remove(file_path)
             LOGS.exception(e)
-            # If it's the Invalid MTProto Client error, suggest checking the session
-            msg = f"`Error starting playback: {e}`"
-            if "Invalid MTProto Client" in str(e):
-                msg += "\n\n**Note:** PyTgCalls doesn't recognize the current client. Ensure VCBOT is active and your session is valid."
-            await xx.edit(msg)
+            await xx.edit(f"`Error starting playback: {e}`")
 
     except Exception as e:
         LOGS.exception(e)
