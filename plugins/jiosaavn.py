@@ -41,10 +41,9 @@ async def jiosaavn_play(event):
         duration = song_data.get("duration", 0)
         image_url = song_data["image"][-1]["url"] if isinstance(song_data["image"], list) and song_data["image"] else ""
         
-        # 2. Get high quality download link from downloadUrl array
+        # 2. Get high quality download link
         download_url = ""
         if song_data.get("downloadUrl"):
-            # Try to get 320kbps, otherwise get the best available
             for dl in song_data["downloadUrl"]:
                 if dl["quality"] == "320kbps":
                     download_url = dl["url"]
@@ -55,39 +54,40 @@ async def jiosaavn_play(event):
         if not download_url:
             return await xx.edit("`Could not find a valid playback URL for this song.`")
 
+        # 3. Download the song locally
+        await xx.edit(f"`Downloading '{title}'...`")
+        file_path, _ = await fast_download(download_url, filename=f"{title}.mp3")
+        
+        if not os.path.exists(file_path):
+            return await xx.edit("`Failed to download the song for playback.`")
+
         await xx.edit(f"`Playing '{title}' by {artist} from JioSaavn...`")
 
-        # 3. Play via VCBot
+        # 4. Play via VCBot using the local file
         try:
-            # Check if vcClient is active
             from . import vcClient
             if not vcClient:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
                 return await xx.edit(get_string("help_12"))
 
-            # Attempt to integrate with VCBot
-            try:
-                # Based on research, VCBot components are often registered in sys.modules
-                import sys
-                vc_play = sys.modules.get('vcbot.play')
-                
-                # If we can access the Player instance via ultSongs
-                if 'vcbot' in sys.modules:
-                    import vcbot
-                    if hasattr(vcbot, 'ultSongs'):
-                        await vcbot.ultSongs.group_call.start_audio(download_url)
-                        return await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`")
-                
-                # Fallback: Trigger the '.vplay' or '.play' command logic if we can find it
-                # Many Ultroid VCBots also react to the 'play' command.
-                # Since we have the direct link, we can attempt to use it.
-                return await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Link:** [Download]({download_url})")
+            import sys
+            if 'vcbot' in sys.modules:
+                import vcbot
+                if hasattr(vcbot, 'ultSongs'):
+                    # Use the local file_path instead of the URL
+                    await vcbot.ultSongs.group_call.start_audio(file_path)
+                    # We should probably keep the file while playing, 
+                    # but many VC bots handle cleanup or need it.
+                    # For now, we'll just notify success.
+                    return await xx.edit(f"**Playing from JioSaavn (Local)**\n\n**Song:** `{title}`\n**Artist:** `{artist}`")
 
-            except Exception as e:
-                LOGS.error(f"VCBot Integration Error: {e}")
-                # If integration fails, we provide the link and a message
-                return await xx.edit(f"**Song Found!**\n\n**Title:** `{title}`\n**Artist:** `{artist}`\n\n`VCBot integration pending - please ensure VCBot is correctly installed.`")
+            # Fallback if VCBot objects aren't directly reachable
+            return await xx.edit(f"**Song Downloaded!**\n\n**Title:** `{title}`\n**Artist:** `{artist}`\n\n`Path: {file_path}`\n`VCBot integration pending - please ensure VCBot is correctly installed.`")
 
         except Exception as e:
+            if os.path.exists(file_path):
+                os.remove(file_path)
             LOGS.exception(e)
             await xx.edit(f"`Error starting playback: {e}`")
 
