@@ -3,7 +3,7 @@
 #
 # This file is a part of < https://github.com/TeamUltroid/Ultroid/ >
 # PLease read the GNU Affero General Public License in
-# <https://github.com/TeamUltroid/Ultroid/blob/main/LICENSE/>.
+# <https://github.com/TeamUltroid/pyUltroid/blob/main/LICENSE/>.
 
 """
 ✘ Commands Available -
@@ -15,7 +15,7 @@
 import os
 import asyncio
 from pyUltroid.fns.helper import async_searcher, fast_download
-from telethon.tl.types import DocumentAttributeAudio
+from telethon import TelegramClient
 from . import ultroid_cmd, LOGS, eor, udB
 
 # py-tgcalls 2.x imports (v2.2.11 compatible)
@@ -36,14 +36,21 @@ async def get_call_client(client):
     if not PyTgCalls:
         return None
     if _call is None:
+        # Debug info to identify why MTProto Client is "Invalid"
+        LOGS.info(f"JioSaavn Playback: Initializing PyTgCalls with client type: {type(client)}")
+        
         try:
-            # Debug info to identify why MTProto Client is "Invalid"
-            LOGS.info(f"JioSaavn Playback: Client Type: {type(client)}")
-            LOGS.info(f"JioSaavn Playback: Client Bases: {type(client).__mro__}")
-            
-            _call = PyTgCalls(client)
+            # Class-swap hack to bypass strict type checks in py-tgcalls 2.x 
+            # for patched Telethon clients (UltroidClient).
+            original_class = client.__class__
+            client.__class__ = TelegramClient
+            try:
+                _call = PyTgCalls(client)
+                LOGS.info("JioSaavn Playback: PyTgCalls initialized successfully with class-swap.")
+            finally:
+                client.__class__ = original_class
         except Exception as e:
-            LOGS.error(f"PyTgCalls init failed: {e}")
+            LOGS.error(f"PyTgCalls init failed despite class-swap: {e}")
             return None
     
     try:
@@ -106,12 +113,12 @@ async def jiosaavn_play(event):
             if not call:
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                return await xx.edit("`Failed to initialize Voice Call Client. Ensure your account can join voice chats.`")
+                return await xx.edit("`Failed to initialize Voice Call Client. Check system logs (ultroid.log) for details.`")
 
             # Play the local file using MediaStream (v2.x)
             await call.play(event.chat_id, MediaStream(file_path, AudioQuality.STUDIO))
             
-            await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Status:** `Streaming (Direct)`")
+            await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Status:** `Streaming (Standalone)`")
             
         except Exception as e:
             if os.path.exists(file_path):
