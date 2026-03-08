@@ -31,13 +31,13 @@ from . import ultroid_cmd, LOGS, eor, udB
 # py-tgcalls 2.x imports (v2.2.11 compatible)
 try:
     from pytgcalls import PyTgCalls
-    from pytgcalls.types import MediaStream, AudioQuality, Update
-    from pytgcalls.types.stream import StreamDeleted
+    from pytgcalls.types import MediaStream, AudioQuality, Update, StreamEnded
 except Exception as e:
     LOGS.error(f"py-tgcalls 2.x import failed: {e}")
     PyTgCalls = None
     MediaStream = None
     AudioQuality = None
+    StreamEnded = None
 
 # Global state
 _call = None
@@ -57,7 +57,7 @@ async def get_call_client(client):
                 
                 @_call.on_update()
                 async def update_handler(client, update):
-                    if isinstance(update, StreamDeleted):
+                    if isinstance(update, StreamEnded):
                         await play_next(update.chat_id, client)
 
                 LOGS.info("JioSaavn Playback: PyTgCalls initialized.")
