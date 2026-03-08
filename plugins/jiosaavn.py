@@ -37,8 +37,10 @@ async def get_call_client(client):
         return None
     if _call is None:
         try:
-            # Using the active event client directly to avoid "Invalid MTProto Client"
-            # and to remove dependency on external vcClient objects.
+            # Debug info to identify why MTProto Client is "Invalid"
+            LOGS.info(f"JioSaavn Playback: Client Type: {type(client)}")
+            LOGS.info(f"JioSaavn Playback: Client Bases: {type(client).__mro__}")
+            
             _call = PyTgCalls(client)
         except Exception as e:
             LOGS.error(f"PyTgCalls init failed: {e}")
@@ -46,7 +48,7 @@ async def get_call_client(client):
     
     try:
         # Check if the client is already running to avoid redundant starts
-        if not _call.is_running:
+        if not getattr(_call, 'is_running', False):
             await _call.start()
     except Exception as e:
         LOGS.debug(f"PyTgCalls start attempt: {e}")
