@@ -118,7 +118,9 @@ async def jiosaavn_play(event):
             # Play the local file using MediaStream (v2.x)
             await call.play(event.chat_id, MediaStream(file_path, AudioQuality.STUDIO))
             
-            await xx.edit(f"**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Status:** `Streaming (Standalone)`")
+            # Use invisible link for thumbnail preview
+            thumb = f"[\u200c]({image_url})" if image_url else ""
+            await xx.edit(f"{thumb}**Playing from JioSaavn**\n\n**Song:** `{title}`\n**Artist:** `{artist}`\n**Status:** `Streaming (Standalone)`")
             
         except Exception as e:
             if os.path.exists(file_path):
